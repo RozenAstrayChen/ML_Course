@@ -1,33 +1,29 @@
 import numpy as np
 
-
 class GaussianFeature(object):
     """
     Gaussian feature
     gaussian function = exp(-0.5 * (x - m) / v)
     """
 
-    def __init__(self, mean, var):
+    def __init__(self, N, width_factor=1.0):
         """
         construct gaussian features
         Parameters
         ----------
-        mean : (n_features, ndim) or (n_features,) ndarray
-            places to locate gaussian function at
-        var : float
-            variance of the gaussian function
+        N: 
         """
-        if mean.ndim == 1:
-            mean = mean[:, None]
-        else:
-            assert mean.ndim == 2
-        assert isinstance(var, float) or isinstance(var, int)
-        self.mean = mean
-        self.var = var
+        self.N = N
+        self.width_factor = width_factor
 
-    def _gauss(self, x, mean):
-        return np.exp(-0.5 * np.sum(np.square(x - mean), axis=-1) / self.var)
-
+    def _gauss_basis(self, x, y, width, axis=None):
+        arg = (x-y) / width
+        return np.exp(-0.5 * np.sum(arg ** 2, axis))
+    
+    def fit(self, X):
+        self.centers_ = np.linspace(X.min(), X.max(), self.N)
+        self.width_ = self.width_factor * (self.centers_[1] - self.centers_[0])
+        
     def transform(self, x):
         """
         transform input array with gaussian features
@@ -40,12 +36,5 @@ class GaussianFeature(object):
         output : (sample_size, n_features)
             gaussian features
         """
-        if x.ndim == 1:
-            x = x[:, None]
-        else:
-            assert x.ndim == 2
-        assert np.size(x, 1) == np.size(self.mean, 1)
-        basis = [np.ones(len(x))]
-        for m in self.mean:
-            basis.append(self._gauss(x, m))
-        return np.asarray(basis).transpose()
+        return self._gauss_basis(x[:,: ,np.newaxis], self.centers_,
+                                 self.width_, axis=1)
