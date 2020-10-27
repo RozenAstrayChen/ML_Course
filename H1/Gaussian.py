@@ -16,13 +16,16 @@ class GaussianFeature(object):
         self.N = N
         self.width_factor = width_factor
 
-    def _gauss_basis(self, x, y, width, axis=None):
-        arg = (x-y) / width
+    def _gauss_basis(self, x, mean, width, axis=None):
+        '''
+        exp((-(x-mean)**2)/2*width**2)
+        '''
+        arg = (x-mean) / width
         return np.exp(-0.5 * np.sum(arg ** 2, axis))
     
     def fit(self, X):
-        self.centers_ = np.linspace(X.min(), X.max(), self.N)
-        self.width_ = self.width_factor * (self.centers_[1] - self.centers_[0])
+        self.centers_ = np.linspace(X.min(), X.max(), self.N) # mu
+        self.width_ = self.width_factor * (self.centers_[1] - self.centers_[0]) # s
         
     def transform(self, x):
         """

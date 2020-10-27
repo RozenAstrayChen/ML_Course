@@ -8,34 +8,25 @@ class SigmoidalFeature(object):
     1 / (1 + exp((m - x) @ c)
     """
 
-    def __init__(self, mean, coef=1):
+    def __init__(self, N, width_factor=1.0, coef=1):
         """
-        construct sigmoidal features
-
+        construct gaussian features
         Parameters
         ----------
-        mean : (n_features, ndim) or (n_features,) ndarray
-            center of sigmoid function
-        coef : (ndim,) ndarray or int or float
-            coefficient to be multplied with the distance
+        N: 
         """
-        if mean.ndim == 1:
-            mean = mean[:, None]
-        else:
-            assert mean.ndim == 2
-        if isinstance(coef, int) or isinstance(coef, float):
-            if np.size(mean, 1) == 1:
-                coef = np.array([coef])
-            else:
-                raise ValueError("mismatch of dimension")
-        else:
-            assert coef.ndim == 1
-            assert np.size(mean, 1) == len(coef)
-        self.mean = mean
-        self.coef = coef
+        self.N = N
+        self.width_factor = width_factor
 
-    def _sigmoid(self, x, mean):
-        return np.tanh((x - mean) @ self.coef * 0.5) * 0.5 + 0.5
+    def _sigmoid_basis(self, x, mean, width, axis=None):
+        arg = np.sum((x-mean) / width, axis)
+        
+        return 1/(1+np.exp(-arg))
+    
+    def fit(self, X):
+        self.centers_ = np.linspace(X.min(), X.max(), self.N) # mu
+        self.width_ = self.width_factor * (self.centers_[1] - self.centers_[0]) # s
+
 
     def transform(self, x):
         """
@@ -51,12 +42,6 @@ class SigmoidalFeature(object):
         output : (sample_size, n_features) ndarray
             sigmoidal features
         """
-        if x.ndim == 1:
-            x = x[:, None]
-        else:
-            assert x.ndim == 2
-        assert np.size(x, 1) == np.size(self.mean, 1)
-        basis = [np.ones(len(x))]
-        for m in self.mean:
-            basis.append(self._sigmoid(x, m))
-        return np.asarray(basis).transpose()
+        return self._sigmoid_basis(x[:,: ,np.newaxis], self.centers_,
+                                 self.width_, axis=1)
+    
