@@ -1,6 +1,6 @@
 import numpy as np
 
-class GaussianFeature(object):
+'''class GaussianFeature(object):
     """
     Gaussian feature
     gaussian function = exp(-0.5 * (x - m) / v)
@@ -17,9 +17,7 @@ class GaussianFeature(object):
         self.width_factor = width_factor
 
     def _gauss_basis(self, x, mean, width, axis=None):
-        '''
-        exp((-(x-mean)**2)/2*width**2)
-        '''
+        
         arg = (x-mean) / width
         return np.exp(-0.5 * np.sum(arg ** 2, axis))
     
@@ -41,3 +39,23 @@ class GaussianFeature(object):
         """
         return self._gauss_basis(x[:,: ,np.newaxis], self.centers_,
                                  self.width_, axis=1)
+'''
+        
+class GaussianFeature(object):
+    """
+    Gaussian feature
+    gaussian function = exp(-0.5 * (x - m) / v)
+    """
+
+    def __init__(self, mean, var):
+        self.mean = mean
+        self.var = var
+
+    def _gauss(self, x, mean):
+        return np.exp(-0.5 * np.sum(np.square(x - mean), axis=-1) / self.var)
+
+    def transform(self, x):
+        basis = [np.ones(len(x))]
+        for m in self.mean:
+            basis.append(self._gauss(x, m))
+        return np.asarray(basis).transpose()
