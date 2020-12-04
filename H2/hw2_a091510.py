@@ -123,11 +123,10 @@ def load_data(path='Fashion_MNIST',type='.zip'):
     #64*5 = 320
     pics = np.zeros((320, png_h, png_w))
     labels = np.repeat(range(0, 5), 64)
-    pic_header = len(b'P5\n92 112\n255\n')
     for i, k in enumerate(files):
         #print('i= ', i,'; k= ', str(k))
-        imgfile = archive.open(str(k))
-        image = pygame.surfarray.array2d(pygame.image.load(imgfile, k))
+        #imgfile = archive.open(str(k))
+        image = pygame.surfarray.array2d(pygame.image.load(k))
         pics[i] = image
     return pics, labels
 
@@ -153,8 +152,6 @@ class logisticRegression():
         self.lr = 1e-3
         self.tr_accuracy = [];self.tr_losses = []
         self.te_accuracy = [];self.te_losses = []
-    def basis_function(self, x):
-        return sigmoid(x)
 
     def cross_entropy(self, t, p):
         return -np.sum(t * np.log(p))
@@ -173,6 +170,7 @@ class logisticRegression():
             # training section
             scores = np.dot(X, self.w)
             prob = soft_max(scores)
+
             m = X.shape[0]
             loss = (1/ m) * self.cross_entropy(y, prob)
             pred = np.where(prob > 0.5, 1, 0)
@@ -288,6 +286,83 @@ class logisticRegression():
         pred = np.where(prob > 0.5, 1, 0)
         return  (pred == y).all(axis=1).mean()
 
+class newtonRaphson(logisticRegression):
+    def __init__(self, w_size, cat):
+        logisticRegression.__init__(self, w_size, cat)
+        self.w_size = w_size
+        self.cat = cat
+
+    def phi(self, x):
+        return x.reshape(len(x), 1)
+    def compute_y(self, n, k, w, X):  # 公式裡的y
+        s = np.float64(0.)
+        ak = w[k].T.dot(self.phi(X[n]))
+        # target classes
+        for j in range(5):
+            aj = w[j].T.dot(self.phi(X[n]))
+            s += np.nan_to_num(np.exp(aj - ak))
+        s = np.nan_to_num(s)
+        return 1. / s
+    def hessian(self, w, k, X):
+        output = np.zeros((len(w[0]), len(w[0])))
+        for n in range(len(X)):
+            scale = self.compute_y(n, k, w, X) * (1 - self.compute_y(n, k, w, X))
+            output += scale * (self.phi(X[n]).dot(self.phi(X[n]).T))
+        return output
+
+    def gradient(self, w, k, t, X):
+        output = np.zeros((len(w[0]), 1))
+        for n in range(len(X)):
+            scale = self.compute_y(n, k, w, X) - t[:, k][n]  # Ynk - Tnk
+            output += scale * self.phi(X[n])
+        return output
+
+    def error(self, w, t, X):
+        s = np.float64(0.)
+        for n in range(len(X)):
+            for k in range(5):
+                if t[:, k][n] != 0.:
+                    s += np.nan_to_num(np.log(self.compute_y(n, k, w, X)))
+        return -1 * s
+
+    def fit_byNR(self, X, y, Xt, yt, epochs=10):
+        self.w = np.zeros((self.cat, len(self.phi(X[0])), 1))
+        m = X.shape[0]
+        for _ in range(epochs):
+
+            new_x = self.w.reshape((self.w.shape[0], self.w.shape[1]))
+            # train
+            scores = np.dot(X, new_x.T)
+            prob = soft_max(scores)
+            loss = self.error(self.w, y, X).flatten()
+            pred = np.where(prob > 0.5, 1, 0)
+            # test
+            scores_t = np.dot(Xt, new_x.T)
+            prob_t = soft_max(scores_t)
+            loss_t = self.error(self.w, yt, Xt).flatten()
+            print(loss, loss_t)
+            pred_t = np.where(prob_t > 0.5, 1, 0)
+
+            self.tr_losses.append(loss)
+            self.tr_accuracy.append((pred == y).all(axis=1).mean())
+            self.te_losses.append(loss_t)
+            self.te_accuracy.append((pred_t == yt).all(axis=1).mean())
+
+            # update weight
+            for k in range(5):
+                # training
+                self.w[k] = self.w[k] - np.linalg.pinv(
+                    self.hessian(self.w, k, X)).dot(
+                    self.gradient(self.w, k, y, X)
+                )
+
+    def accuracy(self, X, y):
+        scores = np.dot(X, self.w.reshape((self.w.shape[0], self.w.shape[1])).T)
+        prob = soft_max(scores)
+        pred = np.where(prob > 0.5, 1, 0)
+        return (pred == y).all(axis=1).mean()
+
+
 def classification():
     pics, labels = load_data()
     # normalize
@@ -301,7 +376,7 @@ def classification():
     X_test = feature[t_idxs]
     y_test = target[t_idxs]
 
-    model = logisticRegression(feature.shape[1], 5)
+    '''model = logisticRegression(feature.shape[1], 5)
     model.fit_byGD(X_train, y_train, X_test, y_test,)
     model.plot_la(model.tr_losses, model.te_losses)
     model.plot_la(model.tr_accuracy, model.te_accuracy, tl='Accuracy: Gradient Descent w/o PCA')
@@ -309,9 +384,9 @@ def classification():
     print('TYPE Gradient Desent\nwithout PCA')
     print('Training accuracy: ', model.accuracy(X_train, y_train))
     print('Test accuracy: ', model.accuracy(X_test, y_test))
-    print("-------------------------------------")
+    print("-------------------------------------")'''
 
-    model = logisticRegression(feature.shape[1], 5)
+    '''model = logisticRegression(feature.shape[1], 5)
     model.fit_bySGD(X_train, y_train, X_test, y_test,)
     model.plot_la(model.tr_losses, model.te_losses)
     model.plot_la(model.tr_accuracy, model.te_accuracy, tl='Accuracy: Stochastic Gradient Descent w/o PCA')
@@ -327,6 +402,16 @@ def classification():
     model.plot_la(model.tr_accuracy, model.te_accuracy, tl='Accuracy: Mini-Batch Stochastic Gradient Descent w/o PCA')
     print("-------------------------------------")
     print('TYPE Mini-Batch Stochastic Gradient Desent\nwithout PCA')
+    print('Training accuracy: ', model.accuracy(X_train, y_train))
+    print('Test accuracy: ', model.accuracy(X_test, y_test))
+    print("-------------------------------------")'''
+
+    model = newtonRaphson(feature.shape[1], 5)
+    model.fit_byNR(X_train, y_train, X_test, y_test)
+    model.plot_la(model.tr_losses, model.te_losses, tl='Learning curve: Newton Raphson w/o PCA')
+    model.plot_la(model.tr_accuracy, model.te_accuracy, tl='Accuracy: Newton Raphson w/o PCA')
+    print("-------------------------------------")
+    print('TYPE Newton Raphson\nwithout PCA')
     print('Training accuracy: ', model.accuracy(X_train, y_train))
     print('Test accuracy: ', model.accuracy(X_test, y_test))
     print("-------------------------------------")
