@@ -172,7 +172,8 @@ class logisticRegression():
             prob = soft_max(scores)
             m = X.shape[0]
             loss = (1/ m) * self.cross_entropy(y, prob)
-            pred = np.where(prob > 0.5, 1, 0)
+            #pred = np.where(prob > 0.5, 1, 0)
+            pred = change_y2(prob)
 
             # test section
             if len(Xt) != 0:
@@ -180,17 +181,19 @@ class logisticRegression():
                 prob_t = soft_max(scores_t)
                 m = Xt.shape[0]
                 loss_t = (1 / m) * self.cross_entropy(yt, prob_t)
-                pred_t = np.where(prob_t > 0.5, 1, 0)
+                #pred_t = np.where(prob_t > 0.5, 1, 0)
+                pred_t = change_y2(prob_t)
                 # collect
                 self.te_losses.append(loss_t)
-                self.te_accuracy.append((pred_t == yt).all(axis=1).mean())
+
+                self.te_accuracy.append((pred_t == change_y(yt)).mean())
 
             # update weight
             grad = (-1 / m) * np.dot(X.T, (y - prob))
             self.w -= self.lr * grad
             # collect
             self.tr_losses.append(loss)
-            self.tr_accuracy.append((pred == y).all(axis=1).mean())
+            self.tr_accuracy.append((pred == change_y(y)).mean())
 
 
 
@@ -229,14 +232,16 @@ class logisticRegression():
             scores = np.dot(X, self.w)
             prob = soft_max(scores)
             m = X.shape[0]
-            pred = np.where(prob > 0.5, 1, 0)
-            self.tr_accuracy.append((pred == y).all(axis=1).mean())
+            #pred = np.where(prob > 0.5, 1, 0)
+            pred = change_y2(prob)
+            self.tr_accuracy.append((pred == change_y(y)).mean())
             # test section
             scores_t = np.dot(Xt, self.w)
             prob_t = soft_max(scores_t)
             m = Xt.shape[0]
-            pred_t = np.where(prob_t > 0.5, 1, 0)
-            self.te_accuracy.append((pred_t == yt).all(axis=1).mean())
+            #pred_t = np.where(prob_t > 0.5, 1, 0)
+            pred_t = change_y2(prob_t)
+            self.te_accuracy.append((pred_t == change_y(yt)).mean())
 
     def fit_byMSGD(self, X, y, Xt=None, yt=None,epochs=1000, batch_size=32):
         m = len(y)
@@ -271,13 +276,15 @@ class logisticRegression():
             # find accuracy in other loop
             scores = np.dot(X, self.w)
             prob = soft_max(scores)
-            pred = np.where(prob > 0.5, 1, 0)
-            self.tr_accuracy.append((pred == y).all(axis=1).mean())
+            #pred = np.where(prob > 0.5, 1, 0)
+            pred = change_y2(prob)
+
+            self.tr_accuracy.append((pred == change_y(y)).mean())
             # test section
             scores_t = np.dot(Xt, self.w)
             prob_t = soft_max(scores_t)
-            pred_t = np.where(prob_t > 0.5, 1, 0)
-            self.te_accuracy.append((pred_t == yt).all(axis=1).mean())
+            pred_t = change_y2(prob_t)
+            self.te_accuracy.append((pred_t == change_y(yt)).mean())
 
     def accuracy(self, X, y):
         scores = np.dot(X, self.w)
@@ -333,17 +340,16 @@ class newtonRaphson(logisticRegression):
             scores = np.dot(X, new_x.T)
             prob = soft_max(scores)
             loss = self.error(self.w, y, X).flatten()
-            pred = np.where(prob > 0.5, 1, 0)
+            pred = change_y2(prob)
             self.tr_losses.append(loss)
-            self.tr_accuracy.append((pred == y).all(axis=1).mean())
+            self.tr_accuracy.append((pred == change_y(y)).mean())
             # test
             scores_t = np.dot(Xt, new_x.T)
             prob_t = soft_max(scores_t)
             loss_t = self.error(self.w, yt, Xt).flatten()
-            pred_t = np.where(prob_t > 0.5, 1, 0)
+            pred_t = change_y2(prob_t)
             self.te_losses.append(loss_t)
-            self.te_accuracy.append((pred_t == yt).all(axis=1).mean())
-
+            self.te_accuracy.append((pred_t == change_y(yt)).mean())
             # update weight
             for k in range(5):
                 # training
@@ -355,9 +361,9 @@ class newtonRaphson(logisticRegression):
         print(X.shape, self.w.shape)
         scores = np.dot(X, self.w.reshape((self.w.shape[0], self.w.shape[1])).T)
         prob = soft_max(scores)
-        preds = np.where(prob > 0.5, 1, 0)
-        print('pred', preds.shape)
-        return change_y(preds)
+        #preds = np.where(prob > 0.5, 1, 0)
+
+        return change_y2(prob)
 
     def accuracy(self, X, y):
         scores = np.dot(X, self.w.reshape((self.w.shape[0], self.w.shape[1])).T)
@@ -366,25 +372,6 @@ class newtonRaphson(logisticRegression):
         return (pred == y).all(axis=1).mean()
 
 
-def svd_flip(u, v, u_based_decision=True):
-    """Sign correction to ensure deterministic output from SVD.
-    Adjusts the columns of u and the rows of v such that the loadings in the
-    columns in u that are largest in absolute value are always positive.
-    https://github.com/scikit-learn/scikit-learn/blob/master/sklearn/utils/extmath.py#L500
-    """
-    if u_based_decision:
-        # columns of u, rows of v
-        max_abs_cols = np.argmax(np.abs(u), axis=0)
-        signs = np.sign(u[max_abs_cols, range(u.shape[1])])
-        u *= signs
-        v *= signs[:, np.newaxis]
-    else:
-        # rows of v, columns of u
-        max_abs_rows = np.argmax(np.abs(v), axis=1)
-        signs = np.sign(v[range(v.shape[0]), max_abs_rows])
-        u *= signs
-        v *= signs[:, np.newaxis]
-    return u, v
 
 def PCA(features, n=2, n_eigVect=None, typ=1):
     mean = np.mean(features.T, axis=1)
@@ -393,15 +380,13 @@ def PCA(features, n=2, n_eigVect=None, typ=1):
     eigenvalue, eigenvector = np.linalg.eig(np.mat(cov))
     sortEigValue = np.argsort(eigenvalue)  # sort eigenvalue
     topNvalue = sortEigValue[-1:-(n + 1):-1]  # select top n value
-    if typ ==1 :
+    if typ ==1 : # training data
         n_eigVect = eigenvector[:, topNvalue]  # select largest n eigenvector
-
     # recon = (C*n_eigVect.T) + M  # reconstruct to original data
-    print('2', center.shape, n_eigVect.shape)
     Trans = center * n_eigVect  # transform to low dim data (same as the return of sklearn fit_transform())
     # transform matrix to array
     Trans = np.asarray(Trans).real
-    return Trans, n_eigVect
+    return Trans, n_eigVect, sortEigValue
     # print(Trans.shape)
 
 def change_y(ys):
@@ -417,54 +402,44 @@ def change_y(ys):
             res.append(4)
         elif y[4] == 1:
             res.append(5)
-        else:
-            res.append(1)
-            pass
+        '''else:
+            res.append(1)'''
     return np.array(res)
-
-def split2Catgorty(X, y):
-    x1 = []; x2 = []; x3 = []; x4 = []; x5 =[]
-    count = 0
-    for ans in y:
-        if ans[0] == 1:
-            x1.append(X[count])
-        elif ans[1] == 1:
-            x2.append(X[count])
-        elif ans[2] == 1:
-            x3.append(X[count])
-        elif ans[3] == 1:
-            x4.append(X[count])
-        elif ans[4] == 1:
-            x5.append(X[count])
-
-        count += 1
-    return np.array([np.array(x1), np.array(x2), np.array(x3), np.array(x4), np.array(x5)])
+def change_y2(y):
+    ans = []
+    for cat_ans in y:
+        cat_ans = cat_ans.tolist()
+        cat = cat_ans.index(max(cat_ans))
+        ans.append(cat+1)
+    return np.array(ans)
 
 #https://stackoverflow.com/questions/22294241/plotting-a-decision-boundary-separating-2-classes-using-matplotlibs-pyplot
-def plot_decision_regionsM1(X, y, clf, test_idx=None, resolution=0.02):
+def plot_decision_regions(X, y,
+                          clf,
+                          marks=('s', 'x', 'o', '^', 'v'),
+                          colors = ('red', 'blue', 'lightgreen', 'gray', 'cyan'),
+                          resolution=0.02):
 
-    # setup marker generator and color map
-    markers = ('s', 'x', 'o', '^', 'v')
-    colors = ('red', 'blue', 'lightgreen', 'gray', 'cyan')
     cmap = ListedColormap(colors[:len(np.unique(y))])
 
-    # plot the decision surface
-    x1_min, x1_max = X[:, 0].min() - 1, X[:, 0].max() + 1
-    x2_min, x2_max = X[:, 1].min() - 1, X[:, 1].max() + 1
-    xx1, xx2 = np.meshgrid(np.arange(x1_min, x1_max, resolution),
-                           np.arange(x2_min, x2_max, resolution))
+    x1_min, x1_max = X[:, 0].min(), X[:, 0].max()
+    x2_min, x2_max = X[:, 1].min(), X[:, 1].max()
+    xx1, xx2= np.meshgrid(
+        np.arange(x1_min, x1_max, resolution),
+        np.arange(x2_min, x2_max, resolution))
     Z = clf.predict(np.array([xx1.ravel(), xx2.ravel()]).T)
+
     Z = Z.reshape(xx1.shape)
-    plt.contourf(xx1, xx2, Z, alpha=0.3, cmap=cmap)
+    plt.contourf(xx1, xx2, Z, alpha=0.4, cmap=cmap)
     plt.xlim(xx1.min(), xx1.max())
     plt.ylim(xx2.min(), xx2.max())
 
     for idx, cl in enumerate(np.unique(y)):
         plt.scatter(x=X[y == cl, 0],
                     y=X[y == cl, 1],
-                    alpha=0.8,
-                    c=colors[idx],
-                    marker=markers[idx],
+                    alpha=0.6,
+                    c=cmap(idx),
+                    marker=marks[idx],
                     label=cl,
                     edgecolor='black')
 
@@ -473,10 +448,9 @@ def feature_extend(X):
     for i in range(len(X)):
         x = X[i]
         a, b = x[0], x[1]
-        #x.append(a*a); x.append(a*b), x.append(b*b)
-        x[0] = a*a ;x[1] = b*b
+        x.append(a*a); x.append(a*b), x.append(b*b)
+        #x[0] = a*a ;x[1] = b*b
         X[i] = x
-
     return np.array(X)
 
 
@@ -495,8 +469,8 @@ def classification():
     X_test = feature[t_idxs]
     y_test = target[t_idxs]
 
-    '''X_train, n_eigVect = PCA(X_train, n=10, typ=1)
-    X_test, _ = PCA(X_test, n=10, n_eigVect=n_eigVect, typ=2)
+    '''X_train, n_eigVect, _ = PCA(X_train, n=10, typ=1)
+    X_test, _, _ = PCA(X_test, n=10, n_eigVect=n_eigVect, typ=2)
     model = logisticRegression(X_train.shape[1], 5)
     model.fit_byGD(X_train, y_train, X_test, y_test,)
     model.plot_la(model.tr_losses, model.te_losses)
@@ -507,7 +481,9 @@ def classification():
     print('Test accuracy: ', model.accuracy(X_test, y_test))
     print("-------------------------------------")'''
 
-    '''model = logisticRegression(X_train.shape[1], 5)
+    '''X_train, n_eigVect, _ = PCA(X_train, n=10, typ=1)
+    X_test, _, _ = PCA(X_test, n=10, n_eigVect=n_eigVect, typ=2)
+    model = logisticRegression(X_train.shape[1], 5)
     model.fit_bySGD(X_train, y_train, X_test, y_test,)
     model.plot_la(model.tr_losses, model.te_losses)
     model.plot_la(model.tr_accuracy, model.te_accuracy, tl='Accuracy: Stochastic Gradient Descent w/o PCA')
@@ -515,8 +491,8 @@ def classification():
     print('TYPE Stochastic Gradient Desent\nwithout PCA')
     print('Training accuracy: ', model.accuracy(X_train, y_train))
     print('Test accuracy: ', model.accuracy(X_test, y_test))
-    print("--------------------------------------")
-    '''
+    print("--------------------------------------")'''
+
     '''
     model = logisticRegression(X_train.shape[1], 5)
     model.fit_byMSGD(X_train, y_train, X_test, y_test,)
@@ -528,9 +504,8 @@ def classification():
     print('Test accuracy: ', model.accuracy(X_test, y_test))
     print("-------------------------------------")
     '''
-    X_train, n_eigVect = PCA(X_train, n=2, typ=1)
-    X_test, _ = PCA(X_test, n=2, n_eigVect=n_eigVect, typ=2)
-    model = newtonRaphson(X_train.shape[1], 5)
+
+    '''model = newtonRaphson(X_train.shape[1], 5)
     model.fit_byNR(X_train, y_train, X_test, y_test)
     model.plot_la(model.tr_losses, model.te_losses, tl='Learning curve: Newton Raphson w/o PCA')
     model.plot_la(model.tr_accuracy, model.te_accuracy, tl='Accuracy: Newton Raphson w/o PCA')
@@ -538,36 +513,43 @@ def classification():
     print('TYPE Newton Raphson\nwithout PCA')
     print('Training accuracy: ', model.accuracy(X_train, y_train))
     print('Test accuracy: ', model.accuracy(X_test, y_test))
-    print("-------------------------------------")
+    print("-------------------------------------")'''
+    '''# 2.b show top d eigenvalues
+    X_train, n_eigVect, sortEigValue = PCA(X_train, n=5, typ=1)
+    #X_test, _ = PCA(X_test, n=2, n_eigVect=n_eigVect, typ=2)
+    print(sortEigValue.shape)
+    plt.imshow(sortEigValue.reshape(28, 28), cmap='gray')
+
+    plt.show()'''
     #2. PCA
     # M = 1
-    """model = newtonRaphson(2, 5)
-    X_train, n_eigVect = PCA(X_train, n=2, typ=1)
-    X_test, _ = PCA(X_test, n=2, n_eigVect=n_eigVect, typ=2)
-    model.fit_byNR(X_train, y_train, epochs=10)
-    # Plotting decision regions
-    plot_decision_regionsM1(X_train, change_y(y_train), clf=model)
-
-    plt.title('M=1')
-    plt.show()"""
-    """
-    import sklearn.preprocessing as preprocessing
+    model = newtonRaphson(2, 5)
+    X_train, n_eigVect, _ = PCA(X_train, n=2, typ=1)
+    X_test, _, _ = PCA(X_test, n=2, n_eigVect=n_eigVect, typ=2)
+    model.fit_byNR(X_train, y_train,X_test, y_test, epochs=1)
     from mlxtend.plotting import plot_decision_regions
 
-    # M = 2
+    # Plotting decision regions
+    plot_decision_regions(X_train, change_y(y_train), clf=model, legend=2)
+    #plot_decision_regions(X_test, change_y(y_test), clf=model)
+    plt.title('M=1')
+    plt.show()
+
+
+    '''# M = 2
     # [a, b , a*a, b*b, a*b]
     model = newtonRaphson(5, 5)
-    pca_X_train, _ = PCA(X_train, n=2)
-    pca_X_test, _ = PCA(X_test, n=2)
+    X_train, n_eigVect, _ = PCA(X_train, n=2, typ=1)
+    X_test, _, _ = PCA(X_test, n=2, n_eigVect=n_eigVect, typ=2)
     # normalize
-    pca_X_train = feature_extend(pca_X_train)
-    pca_X_train = preprocessing.scale(pca_X_train)
-    #pca_X_train = (pca_X_train - pca_X_train.mean()) / pca_X_train.std()
-    model.fit_byNR(pca_X_train, y_train, epochs=10)
-    print(pca_X_train.shape, y_train.shape)
+    X_train = feature_extend(X_train)
+    X_test = feature_extend(X_test)
+    print(X_train.shape)
+
+    model.fit_byNR(X_train, y_train, X_test, y_test, epochs=1)
     # Plotting decision regions
-    plot_decision_regions(pca_X_train, change_y(y_train), clf=model)
+    plot_decision_regions(X_train, change_y(y_train), clf=model)
     plt.title('M=2')
-    plt.show()"""
+    plt.show()'''
 
 classification()
