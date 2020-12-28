@@ -3,7 +3,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.svm import SVC
 from collections import Counter
-from mpl_toolkits.mplot3d import Axes3D
+import prettytable as pt
+from PIL import Image
+from scipy.stats import multivariate_normal
+
+
 
 def import_csv(X_csv='dataset/gp_x.csv', T_csv='dataset/gp_t.csv'):
     X = pd.read_csv(X_csv).values.flatten()
@@ -12,6 +16,16 @@ def import_csv(X_csv='dataset/gp_x.csv', T_csv='dataset/gp_t.csv'):
     data['x'] = df['X'].values.reshape(100, 1)
     data['t'] = df['T'].values.reshape(100, 1)'''
     return X, y
+
+def Read_JPG(filename):
+    '''
+    :param filename:  file path
+    :return: matrix of RGB which type is numpy
+    '''
+    # be ware cv2 is read bgr
+    img = Image.open(filename)
+
+    return img
 
 class gaussianProcess():
     def __init__(self, iter=100):
@@ -308,5 +322,99 @@ class supportVectorMachine():
         poly_svm.plot(X, y, xx, yy, np.array(prediction).reshape(xx.shape))
 
 
-svm = supportVectorMachine()
-svm.process()
+class kmeans():
+    def __init__(self, data, k=2, max_iter=300):
+        self.k = k
+        self.max_iter = max_iter
+        self.eye = np.eye(k)
+        # we need optimal mu
+        # mu size (k, rgb)
+        self.mu = data[np.random.choice(len(data), self.k, replace=False)]
+        # if k = argmin(norm(x-mu)**2)
+        # else 0
+        # rnk size (x*y, k)
+        self.rnk = np.ones([len(data), self.k])
+
+    def minimize_j(self, data):
+        for i in range(self.max_iter):
+            distance = np.sum((data[:, None] - self.mu)**2, axis=2)
+            # pixel -> pixels*k
+            rnk = self.eye[np.argmin(distance, axis=1)]
+
+            if np.array_equal(rnk, self.rnk):
+                break
+            else:
+                self.rnk = rnk
+            self.mu = np.sum(rnk[:, :, None] * data[:, None], axis=0) / np.sum(rnk, axis=0)[:, None]
+
+    def print_rgb_table(self, _type):
+        tb = pt.PrettyTable()
+        tb.add_column(_type, [k for k in range(self.k)])
+        tb.add_column('R', [r for r in (self.mu[:, 0] * 255).astype(int)])
+        tb.add_column('G', [g for g in (self.mu[:, 1] * 255).astype(int)])
+        tb.add_column('B', [b for b in (self.mu[:, 2] * 255).astype(int)])
+        print("======= K = %d (%s) =======" % (self.k, _type))
+        print(tb)
+        print()
+
+    def generate_image(self, _type):
+        if _type == 'K_means':
+            new_data = (self.mu[np.where(self.rnk == 1)[1]] * 255).astype(int)
+        else:
+            new_data = (self.mu[np.argmax(self.gaussians, axis=0)] * 255).astype(int)
+
+        disp = Image.fromarray(new_data.reshape(height, width, depth).astype('uint8'))
+        # disp.show(title=_type)
+        disp.save(_type + str(k) + '.jpg')
+
+class gaussianMixtureModel():
+    def __init__(self, k, k_mean_rnk, k_mean_mu, data, lr=1e-7, max_iter=300):
+        self.k = k
+        self.max_iter = max_iter
+        self.pi = np.sum(k_mean_rnk, axis=0) / len(k_mean_rnk)
+        # k *rgb*rgb
+        self.cov = np.array([np.cov(data[np.where(k_mean_rnk[:, k] == 1)[0]].T) for k in range (self.k)])
+        self.lr = lr
+        self.gaussian = np.array([ multivariate_normal.pdf(data, mean=k_mean_mu[k], cov=self.cov[k])*self.pi[k] for k in range(self.k) ])
+
+    def stepE(self):
+        self.gamma = (self.gaussian / np.sum(self.gaussian, axis=0)).T
+        
+    def stepM(self, data):
+        nk = np.sum(self.gamma, axis=0)
+
+        self.mu = np.sum(self.gamma.dot(data), axis=0) / nk
+        for k in range(self.k):
+            self.cov[k] = (self.gamma[:, k, None] * (data - self.mu[k])).T.dot(data - self.mu[k]) / nk[
+                k] + self.lr * np.eye(depth)
+            self.pi = nk / len(data)
+
+    def evaulate(self, data):
+        for k in range(self.k):
+            self.gaussian[k] = multivariate_normal.pdf(data, mean=self.mu[k], cov=self.cov[k])*self.pi[k]
+
+    def log_likehood(self):
+        np.sum(np.log(np.sum(self.gaussian, axis=0)))
+
+    def em_algorithm(self, data):
+        for i in range(self.max_iter):
+            self.stepE()
+            self.stepM(data)
+            self.evaulate(data)
+
+
+
+K_list = [3, 5, 7, 10]
+img = Image.open('dataset/imghw3.jpg')
+img.load()
+data = np.asarray(img, dtype='float')/255
+height, width, depth = data.shape
+data = np.reshape(data, (-1, depth)) # pixels*RGB  (width*height) = pixels
+for k in K_list:
+    k_mean = kmeans(data, k=k)
+    k_mean.minimize_j(data)
+    #k_mean.print_rgb_table('K_means')
+    #k_mean.generate_image('K_means')
+    gmm = gaussianMixtureModel(k, k_mean.rnk, k_mean.mu, data)
+    gmm.em_algorithm(data)
+
