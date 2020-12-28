@@ -368,7 +368,7 @@ class kmeans():
         disp.save(_type + str(k) + '.jpg')
 
 class gaussianMixtureModel():
-    def __init__(self, k, k_mean_rnk, k_mean_mu, data, lr=1e-7, max_iter=300):
+    def __init__(self, k, k_mean_rnk, k_mean_mu, data, lr=1e-7, max_iter=100):
         self.k = k
         self.max_iter = max_iter
         self.pi = np.sum(k_mean_rnk, axis=0) / len(k_mean_rnk)
@@ -376,14 +376,22 @@ class gaussianMixtureModel():
         self.cov = np.array([np.cov(data[np.where(k_mean_rnk[:, k] == 1)[0]].T) for k in range (self.k)])
         self.lr = lr
         self.gaussian = np.array([ multivariate_normal.pdf(data, mean=k_mean_mu[k], cov=self.cov[k])*self.pi[k] for k in range(self.k) ])
-
+        self.loss = []
     def stepE(self):
+        '''
+        Expectation
+        :return:
+        '''
         self.gamma = (self.gaussian / np.sum(self.gaussian, axis=0)).T
         
     def stepM(self, data):
+        '''
+        Maximization
+        :param data: X
+        :return:
+        '''
         nk = np.sum(self.gamma, axis=0)
-
-        self.mu = np.sum(self.gamma.dot(data), axis=0) / nk
+        self.mu = np.sum(self.gamma[:, :, None]*data[:, None], axis=0) / nk[:, None]
         for k in range(self.k):
             self.cov[k] = (self.gamma[:, k, None] * (data - self.mu[k])).T.dot(data - self.mu[k]) / nk[
                 k] + self.lr * np.eye(depth)
@@ -392,15 +400,23 @@ class gaussianMixtureModel():
     def evaulate(self, data):
         for k in range(self.k):
             self.gaussian[k] = multivariate_normal.pdf(data, mean=self.mu[k], cov=self.cov[k])*self.pi[k]
+        self.loss.append(self.log_likeihood())
 
-    def log_likehood(self):
-        np.sum(np.log(np.sum(self.gaussian, axis=0)))
+    def log_likeihood(self):
+        return np.sum(np.log(np.sum(self.gaussian, axis=0)))
 
     def em_algorithm(self, data):
+
         for i in range(self.max_iter):
             self.stepE()
             self.stepM(data)
             self.evaulate(data)
+
+    def plot_likelihood_log(self):
+        plt.title('Log likelihood of GMM (k=%d)' % self.k)
+        plt.plot([i for i in range(100)], self.loss)
+        plt.savefig('log_likelihood_' + str(self.k) + '.png')
+        plt.show()
 
 
 
@@ -417,4 +433,5 @@ for k in K_list:
     #k_mean.generate_image('K_means')
     gmm = gaussianMixtureModel(k, k_mean.rnk, k_mean.mu, data)
     gmm.em_algorithm(data)
+    gmm.plot_likelihood_log()
 
