@@ -85,11 +85,11 @@ class gaussianProcess():
     def loglikeihood(self, C_inv, C_dev, t):
         return -0.5 * np.trace(C_inv.dot(C_dev)) + 0.5 * np.linalg.multi_dot([t.T, C_inv, C_dev, C_inv, t])
 
-    def ARD(self, train_X, train_y, params, split=50):
+    def ARD(self, train_X, train_y, params, split=50, iter=100):
         dev_func = [0, 0, 0, 0]
-        lr = 0.01
-        # while True:
-        for i in range(5000):
+        lr = 1
+        #while True:
+        for _ in range(iter):
             C_inv = np.linalg.inv(self.exponential_quadratic_kernel(
                 train_X, train_X, params[-1]) + self.beta_inv * np.identity(split))
 
@@ -104,11 +104,16 @@ class gaussianProcess():
                 C_inv, np.full([split, split], 1), train_y)
             dev_func[3] = self.loglikeihood(
                 C_inv, np.multiply.outer(train_X, train_X), train_y)
+            
             params.append(
                 [p + lr * dev for p, dev in zip(params[-1], dev_func)])
+            
+            
+            #print('ard', np.max(np.abs(dev_func)))
+            #if np.max(np.abs(dev_func)) > 6:
+            #print(dev_func)
+            return params
 
-            '''if np.max(np.abs(dev_func)) < 6:
-                return params'''
 
     def process(self, X, y, iter=5000, split=50):
         train_X = X[:split]
@@ -416,7 +421,7 @@ class kmeans():
 
 
 class gaussianMixtureModel():
-    def __init__(self, k, k_mean_rn_k, k_mean_mu, data, lr=0.01, max_iter=300):
+    def __init__(self, k, k_mean_rn_k, k_mean_mu, data, lr=0.01, max_iter=100):
 
         self.k = k
         self.max_iter = max_iter
@@ -470,8 +475,11 @@ class gaussianMixtureModel():
         plt.savefig('log_likelihood_' + str(self.k) + '.png')
         plt.show()
 
+'''X, y = import_csv()
+gp = gaussianProcess()
+gp.process(X, y)'''
 
-'''K_list = [3, 5, 7, 10]
+K_list = [3, 5, 7, 10]
 img = Image.open('dataset/imghw3.jpg')
 img.load()
 data = np.asarray(img, dtype='float')/255
@@ -482,17 +490,11 @@ for k in K_list:
     k_mean.minimize_j(data)
     #k_mean.rgb_table('K_means')
     #k_mean.generate_image('K_means')
-    gmm = gaussianMixtureModel(k, k_mean.rnk, k_mean.mu, data)
+    gmm = gaussianMixtureModel(k, k_mean.rn_k, k_mean.mu, data)
     gmm.em_algorithm(data)
-    
-    
-X, y = import_csv()
-g = gaussianProcess()
-g.process(X, y)    
-    
-'''
 
 
 
-svm = supportVectorMachine()
-svm.process()
+
+'''svm = supportVectorMachine()
+svm.process()'''
